@@ -1,67 +1,97 @@
 import logging
 from environs import Env
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
-# Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-
-logger = logging.getLogger(__name__)
 env = Env()
 env.read_env()
 TOKEN = env.str('TOKEN')
 
-
-# Define a few command handlers. These usually take the two arguments update and
-# context. Error handlers also receive the raised TelegramError object in error.
-def start(update, context):
-    """Send a message when the command /start is issued."""
-    update.message.reply_text('Hi!')
-
-
-def help(update, context):
-    """Send a message when the command /help is issued."""
-    update.message.reply_text('Help!')
+# Enable logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 
-def echo(update, context):
-    """Echo the user message."""
-    update.message.reply_text(update.message.text + ' vuahaha')
+from telegram.ext import Updater, CallbackContext, CommandHandler, Dispatcher, ConversationHandler, MessageHandler, \
+    Filters
+from telegram import Update, ReplyKeyboardMarkup
 
 
-def error(update, context):
-    """Log Errors caused by Updates."""
-    logger.warning('Update "%s" caused error "%s"', update, context.error)
+USERTYPE, MENTORACTIONS, CREATEGROUP = range(3)
 
 
-def main():
-    """Start the bot."""
-    # Create the Updater and pass it your bot's token.
-    # Make sure to set use_context=True to use the new context based callbacks
-    # Post version 12 this will no longer be necessary
-    updater = Updater(TOKEN, use_context=True)
-
-    # Get the dispatcher to register handlers
-    dp = updater.dispatcher
-
-    # on different commands - answer in Telegram
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("help", help))
-
-    # on noncommand i.e message - echo the message on Telegram
-    dp.add_handler(MessageHandler(Filters.text, echo))
-
-    # log all errors
-    dp.add_error_handler(error)
-
-    # Start the Bot
-    updater.start_polling()
-
-    # Run the bot until you press Ctrl-C or the process receives SIGINT,
-    # SIGTERM or SIGABRT. This should be used most of the time, since
-    # start_polling() is non-blocking and will stop the bot gracefully.
-    updater.idle()
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text(
+        text='Choose as who you want to login?',
+        reply_markup=ReplyKeyboardMarkup([
+            ['Mentor'], ['Student']
+        ], resize_keyboard=True)
+    )
+    return USERTYPE
 
 
-if __name__ == '__main__':
-    main()
+def mentor(update: Update, context: CallbackContext):
+    update.message.reply_text(
+        text='You are mentor',
+        reply_markup=ReplyKeyboardMarkup([
+            ['Create group'], ['My groups']
+        ], resize_keyboard=True)
+    )
+    return MENTORACTIONS
+
+
+def add_group(update: Update, context: CallbackContext):
+    group = update.message.text
+    update.message.reply_text(
+        text=f'You created group {group}'
+    )
+    return MENTORACTIONS
+
+
+def student(update: Update, context: CallbackContext):
+    # MessageHandler(Filters.regex('^(Back)$'), back)
+    update.message.reply_text(
+        text='You are student',
+        reply_markup=ReplyKeyboardMarkup([
+            ['Join Group'], ['My groups']
+        ], resize_keyboard=True)
+    )
+    return 3
+
+
+def create_group(update: Update, context: CallbackContext):
+    update.message.reply_text('Write name of your group?')
+    return CREATEGROUP
+
+
+def join_group(update: Update, context: CallbackContext):
+    pass
+
+
+def my_groups(update: Update, context: CallbackContext):
+    update.message.reply_text(
+        text='\n'.join([f'{idx}. {group}' for idx, group in enumerate(['first group', 'second group'], start=1)])
+    )
+
+
+updater = Updater(TOKEN)
+dp: Dispatcher = updater.dispatcher
+
+dp.add_handler(ConversationHandler(
+    entry_points=[CommandHandler('start', start)],
+    states={
+        USERTYPE: [
+            MessageHandler(Filters.regex('^(Mentor)$'), mentor),
+            MessageHandler(Filters.regex('^(Student)$'), student),
+        ],
+        MENTORACTIONS: [
+            MessageHandler(Filters.regex('^(Create group)$'), create_group),
+            MessageHandler(Filters.regex('^(My groups)$'), my_groups),
+        ],
+        CREATEGROUP: [MessageHandler(Filters.text, add_group)],
+    },
+    fallbacks=[MessageHandler(Filters.regex('^(Main)$'), start)]
+))
+
+updater.start_polling()
+updater.idle()
